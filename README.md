@@ -182,6 +182,33 @@ pixi run build-wheel                  # bundles native deps (Linux: patchelf, ma
 pip install wheelhouse/tesseract*.whl
 ```
 
+### Building with colcon in a ROS workspace
+
+For ROS users who load MoveIt (or anything else linking tesseract C++) in the
+same process: build the bindings against the **same** tesseract C++ libraries
+as the rest of the workspace. PyPI wheels bundle their own conda-built
+`libtesseract_*.so` set, which collides with the ROS workspace's copies of the
+same sonames — whichever `LD_LIBRARY_PATH` entry wins, one of the two was built
+against a different tesseract version.
+
+This repo ships a `package.xml` (plain `cmake` build type), so colcon can build it
+directly:
+
+```bash
+pip install "nanobind>=2,<3"          # into the python colcon will use
+cd ~/your_ws/src
+ln -s /path/to/tesseract_nanobind
+colcon build --packages-select tesseract_nanobind \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release
+```
+
+Prerequisites: `python3-dev` and nanobind (`pip install "nanobind>=2,<3"` — nanobind
+3.x is not supported yet). With no `TESSERACT_CPP_PREFIX`/`CONDA_PREFIX` set (normal
+in a ROS container), CMake installs the package into the python's `site-packages`
+(override with `-DTESSERACT_NB_PYTHON_INSTALL_DIR=...`). No RPATH is embedded, so
+the extensions resolve `libtesseract_*.so` through the workspace environment — the
+exact same copies MoveIt loads. One soname, one copy, no conflict.
+
 ## Acknowledgments
 
 This project builds upon the excellent work of [John Wason](https://github.com/johnwason) and the [Tesseract Robotics](https://github.com/tesseract-robotics) team. The original [tesseract_python](https://github.com/tesseract-robotics/tesseract_python) SWIG bindings laid the foundation for this nanobind implementation.

@@ -75,7 +75,13 @@ def _is_editable_install() -> bool:
         if direct_url:
             data = json.loads(direct_url)
             return data.get("dir_info", {}).get("editable", False)
-    except (FileNotFoundError, KeyError, TypeError, json.JSONDecodeError) as e:
+    except (
+        FileNotFoundError,
+        KeyError,
+        TypeError,
+        json.JSONDecodeError,
+        PackageNotFoundError,
+    ) as e:
         logger.debug(f"Editable install check failed: {type(e).__name__}: {e}")
     # Fallback: check if __file__ is outside site-packages
     pkg_path = Path(__file__).parent
@@ -159,6 +165,36 @@ def _configure_environment():
         else pkg_dir / "_no_dev"
     )
     ws_config = ws_composer / "config" / "task_composer_plugins.yaml"
+
+    # Fallback: ROS/colcon install (no bundled data, no conda). Locate the data
+    # via the ament resource index so it comes from the same workspace the C++
+    # libs (and MoveIt) were built against. Requires the workspace to be sourced.
+    if not conda_share:
+        try:
+            from ament_index_python.packages import get_package_share_directory
+
+            # Some tesseract installs name the support package `tesseract`,
+            # others (upstream source installs) `tesseract_support`.
+            for pkg in ("tesseract", "tesseract_support"):
+                try:
+                    ros_support_base = Path(get_package_share_directory(pkg))
+                except KeyError:
+                    continue
+                support_sub = (
+                    ros_support_base / "support" if pkg == "tesseract" else ros_support_base
+                )
+                if support_sub.is_dir():
+                    ws_support = support_sub
+                    # TESSERACT_RESOURCE_PATH gets the parent (via use_parent
+                    # below) so package://tesseract[_support]/... resolves.
+                    ws_resource = support_sub
+                    break
+            ros_planning = Path(get_package_share_directory("tesseract_planning"))
+            if (ros_planning / "task_composer" / "config").is_dir():
+                ws_composer = ros_planning / "task_composer"
+                ws_config = ws_composer / "config" / "task_composer_plugins.yaml"
+        except Exception as e:  # pragma: no cover - non-ROS environments
+            logger.debug(f"ament resource lookup failed: {type(e).__name__}: {e}")
 
     # TESSERACT_SUPPORT_DIR: path to tesseract_support (bundled or dev)
     _set_env_if_missing("TESSERACT_SUPPORT_DIR", support_dir, ws_support)

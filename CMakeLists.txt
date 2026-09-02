@@ -16,7 +16,24 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Find Python and nanobind
 find_package(Python 3.9 REQUIRED COMPONENTS Interpreter Development.Module Development.SABIModule)
-find_package(nanobind CONFIG REQUIRED)
+find_package(nanobind CONFIG QUIET)
+if(NOT nanobind_FOUND)
+  # nanobind from pip may not be on the default CMake search path (e.g. colcon
+  # builds against a system python). Ask it where its CMake config lives.
+  execute_process(
+    COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
+    OUTPUT_VARIABLE nanobind_DIR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+    RESULT_VARIABLE _nanobind_probe_result
+  )
+  if(NOT _nanobind_probe_result EQUAL 0)
+    message(FATAL_ERROR
+      "nanobind not found: run `pip install nanobind` into the python that "
+      "colcon/cmake will use (${Python_EXECUTABLE})")
+  endif()
+  find_package(nanobind CONFIG REQUIRED)
+endif()
 
 # The tesseract C++ libs (and every dependency) are provided by the tesseract-robotics
 # conda packages installed under the C++ prefix; find_package() resolves them via the
@@ -71,6 +88,40 @@ find_package(tesseract REQUIRED COMPONENTS environment)
 find_package(tesseract_planning REQUIRED COMPONENTS command_language)
 find_package(console_bridge REQUIRED)
 
+# ============== Install layout ==============
+# - wheel/conda builds (TESSERACT_CPP_PREFIX or CONDA_PREFIX set): extensions go
+#   into the wheel's relative tesseract_robotics/ tree; scikit-build-core installs
+#   the python package sources (see [tool.scikit-build] wheel.packages).
+# - plain CMake / colcon builds (neither set): the tesseract C++ stack comes from
+#   the surrounding ROS workspace via CMAKE_PREFIX_PATH, and everything is
+#   installed into Python's site-packages so `import tesseract_robotics` works
+#   without extra env setup. Bindings then load the exact same libtesseract_*.so
+#   copies as MoveIt (via LD_LIBRARY_PATH), avoiding duplicate-soname conflicts.
+set(TESSERACT_NB_PYTHON_INSTALL_DIR
+    ""
+    CACHE PATH
+    "Install dir of the tesseract_robotics python package (default: Python_SITELIB for colcon/plain builds, package-relative for wheel builds)")
+
+if(TESSERACT_NB_PYTHON_INSTALL_DIR STREQUAL "")
+  if(DEFINED TESSERACT_CPP_PREFIX)
+    set(TESSERACT_NB_PYTHON_INSTALL_DIR "tesseract_robotics")
+    set(TESSERACT_NB_INSTALL_PYTHON_PACKAGE OFF)
+  else()
+    set(TESSERACT_NB_PYTHON_INSTALL_DIR "${Python_SITELIB}/tesseract_robotics")
+    set(TESSERACT_NB_INSTALL_PYTHON_PACKAGE ON)
+  endif()
+else()
+  set(TESSERACT_NB_INSTALL_PYTHON_PACKAGE ON)
+endif()
+message(STATUS "Python package install dir: ${TESSERACT_NB_PYTHON_INSTALL_DIR}")
+
+if(TESSERACT_NB_INSTALL_PYTHON_PACKAGE)
+  install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/tesseract_robotics/"
+          DESTINATION "${TESSERACT_NB_PYTHON_INSTALL_DIR}"
+          PATTERN "__pycache__" EXCLUDE
+          PATTERN "*.pyc" EXCLUDE)
+endif()
+
 # Define reusable function for nanobind extensions
 function(add_tesseract_nanobind_extension module_name source_file)
   nanobind_add_module(
@@ -100,7 +151,7 @@ function(add_tesseract_nanobind_extension module_name source_file)
 
   # Install the module
   install(TARGETS _${module_name}
-          LIBRARY DESTINATION tesseract_robotics/${module_name})
+          LIBRARY DESTINATION ${TESSERACT_NB_PYTHON_INSTALL_DIR}/${module_name})
 endfunction()
 
 # Add tesseract_common module
@@ -259,7 +310,7 @@ target_link_libraries(_ompl_base PRIVATE ${OMPL_LIBRARIES})
 set_target_properties(_ompl_base PROPERTIES
   CXX_VISIBILITY_PRESET default
   VISIBILITY_INLINES_HIDDEN OFF)
-install(TARGETS _ompl_base LIBRARY DESTINATION tesseract_robotics/ompl_base)
+install(TARGETS _ompl_base LIBRARY DESTINATION ${TESSERACT_NB_PYTHON_INSTALL_DIR}/ompl_base)
 
 # Add tesseract_motion_planners_descartes module (optional - only if descartes component was built)
 find_package(tesseract_planning QUIET COMPONENTS motion_planners_descartes)
