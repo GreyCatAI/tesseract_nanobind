@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>tesseract_nanobind</name>
-  <version>0.35.0.7</version>
+  <version>0.35.0</version>
   <description>
     Tesseract robotics Python bindings built with nanobind. Designed to be built
     with colcon against the same tesseract C++ libraries the rest of the ROS
