@@ -182,6 +182,24 @@ pixi run build-wheel                  # bundles native deps (Linux: patchelf, ma
 pip install wheelhouse/tesseract*.whl
 ```
 
+### Building with colcon in a ROS workspace
+
+This repository includes a `package.xml` and can be built directly with colcon.
+This is useful when the bindings need to link against the Tesseract libraries in
+the same ROS workspace.
+
+```bash
+cd ~/your_ws/src
+ln -s /path/to/tesseract_nanobind
+cd ..
+colcon build --packages-select tesseract_nanobind \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release
+source install/setup.bash
+```
+
+The Tesseract dependencies and the nanobind CMake package must be available in
+the workspace environment before building.
+
 ## Acknowledgments
 
 This project builds upon the excellent work of [John Wason](https://github.com/johnwason) and the [Tesseract Robotics](https://github.com/tesseract-robotics) team. The original [tesseract_python](https://github.com/tesseract-robotics/tesseract_python) SWIG bindings laid the foundation for this nanobind implementation.
