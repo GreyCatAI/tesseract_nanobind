@@ -14,17 +14,17 @@
   <license>Apache-2.0</license>
 
   <buildtool_depend condition="$ROS_VERSION == 2">cmake</buildtool_depend>
+  <build_depend>ros_industrial_cmake_boilerplate</build_depend>
 
   <!-- tesseract C++ libraries (must be built/installed in the same workspace,
        so the bindings link the exact same sonames as MoveIt) -->
   <depend>tesseract</depend>
   <depend>tesseract_planning</depend>
-  <build_depend>python3-nanobind</build_depend>
+  <build_depend>nanobind-dev</build_depend>
 
   <exec_depend condition="$ROS_PYTHON_VERSION == 3">python3-numpy</exec_depend>
   <exec_depend condition="$ROS_PYTHON_VERSION == 3">python3-yaml</exec_depend>
   <exec_depend condition="$ROS_PYTHON_VERSION == 3">python3-scipy</exec_depend>
-  <exec_depend condition="$ROS_PYTHON_VERSION == 3">python3-loguru</exec_depend>
   <exec_depend condition="$ROS_VERSION == 2">ament_index_python</exec_depend>
 
   <export>
