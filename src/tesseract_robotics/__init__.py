@@ -11,7 +11,7 @@ Environment Variables (auto-configured on first use):
     TESSERACT_KINEMATICS_PLUGIN_DIRECTORIES: Kinematics plugin path
     TESSERACT_TASK_COMPOSER_PLUGIN_DIRECTORIES: Composer plugin path
 
-Priority: Bundled data (installed) > Dev workspace (editable) > User env vars
+Priority: User env vars > bundled data > Conda environment > ROS workspace
 """
 
 from __future__ import annotations
@@ -98,6 +98,25 @@ def _set_env_if_missing(var_name: str, *candidates: Path, use_parent: bool = Fal
             return
 
 
+def _find_conda_share(conda_prefix: str | None) -> Path | None:
+    """Return a Conda share directory containing Tesseract data, if present."""
+    if not conda_prefix:
+        return None
+    for candidate in (
+        Path(conda_prefix) / "share",
+        Path(conda_prefix) / "Library" / "share",
+    ):
+        if (candidate / "tesseract").is_dir():
+            return candidate
+    return None
+
+
+def _plugin_dir_from_ros_share(package_share: Path) -> Path | None:
+    """Derive <prefix>/lib from an ament <prefix>/share/<package> path."""
+    candidate = package_share.parent.parent / "lib"
+    return candidate if candidate.is_dir() else None
+
+
 def _resolve_config_paths(config_path: Path, plugin_path: str | None) -> Path:
     """
     Resolve plugin path placeholders in task composer YAML configs.
@@ -151,12 +170,7 @@ def _configure_environment():
     # share/ (Library/share on conda Windows), plugin libs under lib/ (Library/bin
     # on Windows). Mirrors the layout the wheel bundles into the package's data/ dir.
     conda_prefix = os.environ.get("CONDA_PREFIX")
-    conda_share = Path(conda_prefix) / "share" if conda_prefix else None
-    if conda_share and not (conda_share / "tesseract").is_dir():
-        # conda on Windows installs data under the Library/ prefix
-        alt = Path(conda_prefix) / "Library" / "share"
-        if (alt / "tesseract").is_dir():
-            conda_share = alt
+    conda_share = _find_conda_share(conda_prefix)
     ws_support = (conda_share / "tesseract" / "support") if conda_share else pkg_dir / "_no_dev"
     ws_resource = (conda_share / "tesseract") if conda_share else pkg_dir / "_no_dev"
     ws_composer = (
@@ -169,7 +183,8 @@ def _configure_environment():
     # Fallback: ROS/colcon install (no bundled data, no conda). Locate the data
     # via the ament resource index so it comes from the same workspace the C++
     # libs (and MoveIt) were built against. Requires the workspace to be sourced.
-    if not conda_share:
+    ros_plugin_dir = None
+    if conda_share is None:
         try:
             from ament_index_python.packages import (
                 PackageNotFoundError as AmentPackageNotFoundError,
@@ -200,6 +215,9 @@ def _configure_environment():
                 if (ros_planning / "task_composer" / "config").is_dir():
                     ws_composer = ros_planning / "task_composer"
                     ws_config = ws_composer / "config" / "task_composer_plugins.yaml"
+                    # ament package shares use <prefix>/share/<package>. Plugin
+                    # libraries from that same install live under <prefix>/lib.
+                    ros_plugin_dir = _plugin_dir_from_ros_share(ros_planning)
 
     # TESSERACT_SUPPORT_DIR: path to tesseract_support (bundled or dev)
     _set_env_if_missing("TESSERACT_SUPPORT_DIR", support_dir, ws_support)
@@ -210,7 +228,7 @@ def _configure_environment():
     # dev (conda): $CONDA_PREFIX/share/tesseract → use parent (= share)
     _set_env_if_missing("TESSERACT_RESOURCE_PATH", support_dir.parent, ws_resource, use_parent=True)
 
-    # Plugin search paths - env var, bundled plugins, or $CONDA_PREFIX/lib (editable)
+    # Plugin search paths - env var, bundled plugins, Conda, or the ROS install prefix
     # Linux:   pkg_dir (all deps bundled in package root with $ORIGIN rpath)
     # macOS:   .dylibs (delocate-repaired)
     # Windows: pkg_dir (plugin factory DLLs bundled there; delvewheel libs go to
@@ -225,7 +243,7 @@ def _configure_environment():
         # editable install: plugin factory libs live alongside the conda libs
         # ($CONDA_PREFIX/lib, or Library/bin for the DLLs on conda Windows).
         conda_lib = None
-        if conda_prefix:
+        if conda_share is not None and conda_prefix is not None:
             for cand in (Path(conda_prefix) / "lib", Path(conda_prefix) / "Library" / "bin"):
                 if cand.is_dir():
                     conda_lib = cand
@@ -239,6 +257,8 @@ def _configure_environment():
             plugin_path = str(pkg_dir)
         elif editable and conda_lib is not None:
             plugin_path = str(conda_lib)
+        elif ros_plugin_dir is not None:
+            plugin_path = str(ros_plugin_dir)
 
     # TESSERACT_TASK_COMPOSER_CONFIG_FILE
     # Check if patching is needed (for bundled wheels or if env.sh set a path)
@@ -295,14 +315,14 @@ def get_tesseract_support_path() -> Path:
 
 
 class TaskComposerConfigNotFoundError(FileNotFoundError):
-    """No task composer config found via env var, bundled data, or conda share."""
+    """No task composer config found via env var, bundled data, Conda, or ROS."""
 
 
 def get_task_composer_config_path() -> Path:
     """Get the resolved task composer plugin config file.
 
     Resolution is owned by `_configure_environment()` (env var → bundled data →
-    conda share, with plugin-path placeholders patched) and published via
+    Conda share → ROS workspace, with plugin-path placeholders patched) and published via
     TESSERACT_TASK_COMPOSER_CONFIG_FILE; this returns that single source of
     truth as a `Path`.
 
@@ -315,7 +335,8 @@ def get_task_composer_config_path() -> Path:
         return Path(env_cfg)
     raise TaskComposerConfigNotFoundError(
         f"no task composer config found (TESSERACT_TASK_COMPOSER_CONFIG_FILE={env_cfg!r}); "
-        "checked env var, bundled data/task_composer_config/, and $CONDA_PREFIX share"
+        "checked env var, bundled data/task_composer_config/, $CONDA_PREFIX share, "
+        "and the ROS ament index"
     )
 
 

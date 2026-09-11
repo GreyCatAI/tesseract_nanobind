@@ -12,9 +12,9 @@
 
 Python bindings for [Tesseract](https://github.com/tesseract-robotics/tesseract) robotics motion planning using [nanobind](https://github.com/wjakob/nanobind).
 
-## Documentation 
+## Documentation
 
-Maintained in `/docs` and published to https://tesseract-robotics.github.io/tesseract_nanobind/
+Maintained in `/docs` and published to <https://tesseract-robotics.github.io/tesseract_nanobind/>
 
 ## Features
 
@@ -34,15 +34,15 @@ for an excellent overview of `Tesseract's` architecture & features see [this pre
 pip install tesseract-robotics-nanobind
 ```
 
-**Platform support:** 
+**Platform support:**
 
 - linux
-   - x86_64 - 3.10-3.14
-   - aarch64 - 3.12-3.14
+  - x86_64 - 3.10-3.14
+  - aarch64 - 3.12-3.14
 - windows
-    - x86_64 - 3.9-3.14
+  - x86_64 - 3.9-3.14
 - macOS
-    - arm64 - 3.9-3.14
+  - arm64 - 3.9-3.14
 
 ## Quick Start
 
@@ -133,16 +133,16 @@ pixi run build    # installs prebuilt C++ libs + builds/installs bindings (edita
 
 ### Available tasks
 
-| Task | Description |
-|------|-------------|
-| `pixi run build` | Install C++ libs (conda) + build/install bindings |
-| `pixi run install` | Editable install of the bindings |
-| `pixi run test` | Run pytest with xdist parallelism |
-| `pixi run lint` | Lint with ruff |
-| `pixi run fmt` | Format with ruff |
-| `pixi run typecheck` | Type check with pyright |
-| `pixi run docs` | Live docs server (localhost:8000) |
-| `pixi run docs-build` | Build static docs to `site/` |
+| Task                  | Description                                       |
+| --------------------- | ------------------------------------------------- |
+| `pixi run build`      | Install C++ libs (conda) + build/install bindings |
+| `pixi run install`    | Editable install of the bindings                  |
+| `pixi run test`       | Run pytest with xdist parallelism                 |
+| `pixi run lint`       | Lint with ruff                                    |
+| `pixi run fmt`        | Format with ruff                                  |
+| `pixi run typecheck`  | Type check with pyright                           |
+| `pixi run docs`       | Live docs server (localhost:8000)                 |
+| `pixi run docs-build` | Build static docs to `site/`                      |
 
 ### Running tests
 
@@ -200,11 +200,14 @@ source install/setup.bash
 The Tesseract dependencies and the nanobind CMake package must be available in
 the workspace environment before building.
 
+rosdep has no `python3-loguru`, install it manually.
+
 ## Acknowledgments
 
 This project builds upon the excellent work of [John Wason](https://github.com/johnwason) and the [Tesseract Robotics](https://github.com/tesseract-robotics) team. The original [tesseract_python](https://github.com/tesseract-robotics/tesseract_python) SWIG bindings laid the foundation for this nanobind implementation.
 
 Special thanks to:
+
 - **John Wason** ([Wason Technology, LLC](https://www.wasontech.com/)) - Original tesseract_python author and Tesseract maintainer
 - **Levi Armstrong** - Tesseract core developer
 - **Jelle Feringa** ([Terrestrial](http://terrestrial.construction)) - nanobind port developer

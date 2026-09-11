@@ -8,6 +8,12 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "Minimum CMake policy version"
 
 project(tesseract_nanobind LANGUAGES CXX)
 
+# Match the upstream Tesseract ROS packaging path. Wheel builds do not need
+# ROS package metadata or the boilerplate dependency.
+if(NOT SKBUILD)
+  find_package(ros_industrial_cmake_boilerplate REQUIRED)
+endif()
+
 # Build configuration
 set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
 set(CMAKE_CXX_STANDARD 17)
@@ -15,7 +21,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Find Python and nanobind
-find_package(Python 3.9 REQUIRED COMPONENTS Interpreter Development.Module Development.SABIModule)
+find_package(Python 3.9 REQUIRED
+  COMPONENTS Interpreter Development.Module
+  OPTIONAL_COMPONENTS Development.SABIModule)
 find_package(nanobind CONFIG REQUIRED)
 
 # The tesseract C++ libs (and every dependency) are provided by the tesseract-robotics
@@ -72,11 +80,11 @@ find_package(tesseract_planning REQUIRED COMPONENTS command_language)
 find_package(console_bridge REQUIRED)
 
 # ============== Install layout ==============
-# - wheel/conda builds (TESSERACT_CPP_PREFIX or CONDA_PREFIX set): extensions go
+# - wheel builds (SKBUILD is set by scikit-build-core): extensions go
 #   into the wheel's relative tesseract_robotics/ tree; scikit-build-core installs
 #   the python package sources (see [tool.scikit-build] wheel.packages).
-# - plain CMake / colcon builds (neither set): the tesseract C++ stack comes from
-#   the surrounding ROS workspace via CMAKE_PREFIX_PATH, and everything is
+# - plain CMake / colcon builds: the tesseract C++ stack normally comes from the
+#   surrounding ROS workspace via CMAKE_PREFIX_PATH, and everything is
 #   installed into Python's site-packages so `import tesseract_robotics` works
 #   without extra env setup. Bindings then load the exact same libtesseract_*.so
 #   copies as MoveIt (via LD_LIBRARY_PATH), avoiding duplicate-soname conflicts.
@@ -86,7 +94,7 @@ set(TESSERACT_NB_PYTHON_INSTALL_DIR
     "Install dir of the tesseract_robotics python package (default: Python_SITELIB for colcon/plain builds, package-relative for wheel builds)")
 
 if(TESSERACT_NB_PYTHON_INSTALL_DIR STREQUAL "")
-  if(DEFINED TESSERACT_CPP_PREFIX)
+  if(SKBUILD)
     set(TESSERACT_NB_PYTHON_INSTALL_DIR "tesseract_robotics")
     set(TESSERACT_NB_INSTALL_PYTHON_PACKAGE OFF)
   else()
@@ -115,6 +123,12 @@ if(TESSERACT_NB_INSTALL_PYTHON_PACKAGE)
           DESTINATION "${TESSERACT_NB_PYTHON_INSTALL_DIR}"
           PATTERN "__pycache__" EXCLUDE
           PATTERN "*.pyc" EXCLUDE)
+endif()
+
+# Use the same ROS package manifest and ament hooks as upstream Tesseract.
+if(NOT SKBUILD)
+  install_pkgxml()
+  install_ament_hooks()
 endif()
 
 # Define reusable function for nanobind extensions
@@ -446,13 +460,13 @@ message(STATUS "nanobind: ${nanobind_VERSION}")
 message(STATUS "===============================================")
 
 # ============== Install Bundled Data Files ==============
-# These are installed into the wheel so env vars can use relative paths.
+# These are installed only into wheels so env vars can use relative paths.
 # The tesseract-robotics conda packages ship them under <cpp-prefix>/share:
 #   support meshes/urdfs  -> share/tesseract/support (+ share/tesseract/package.xml)
 #   task_composer config  -> share/tesseract_planning/task_composer/config
 # TESSERACT_CPP_PREFIX (set above) is the active env, or the py312 env when
 # cross-building the cp39 wheel.
-if(DEFINED TESSERACT_CPP_PREFIX)
+if(SKBUILD AND DEFINED TESSERACT_CPP_PREFIX)
   set(TESSERACT_SUPPORT_SRC "${TESSERACT_CPP_PREFIX}/share/tesseract/support")
   set(TASK_COMPOSER_CFG_SRC "${TESSERACT_CPP_PREFIX}/share/tesseract_planning/task_composer/config")
   if(WIN32 AND NOT EXISTS "${TESSERACT_SUPPORT_SRC}")
@@ -462,7 +476,7 @@ if(DEFINED TESSERACT_CPP_PREFIX)
   endif()
 endif()
 
-if(EXISTS "${TESSERACT_SUPPORT_SRC}")
+if(SKBUILD AND EXISTS "${TESSERACT_SUPPORT_SRC}")
   message(STATUS "Installing tesseract_support from: ${TESSERACT_SUPPORT_SRC}")
   install(DIRECTORY "${TESSERACT_SUPPORT_SRC}/"
     DESTINATION tesseract_robotics/data/tesseract/support
@@ -478,15 +492,15 @@ if(EXISTS "${TESSERACT_SUPPORT_SRC}")
   if(EXISTS "${TESSERACT_PKG_XML}")
     install(FILES "${TESSERACT_PKG_XML}" DESTINATION tesseract_robotics/data/tesseract)
   endif()
-else()
+elseif(SKBUILD)
   message(WARNING "tesseract_support not found at ${TESSERACT_SUPPORT_SRC}")
 endif()
 
-if(EXISTS "${TASK_COMPOSER_CFG_SRC}")
+if(SKBUILD AND EXISTS "${TASK_COMPOSER_CFG_SRC}")
   message(STATUS "Installing task_composer config from: ${TASK_COMPOSER_CFG_SRC}")
   install(DIRECTORY "${TASK_COMPOSER_CFG_SRC}/"
     DESTINATION tesseract_robotics/data/task_composer_config
     FILES_MATCHING PATTERN "*.yaml" PATTERN "*.schema")
-else()
+elseif(SKBUILD)
   message(WARNING "task_composer config not found at ${TASK_COMPOSER_CFG_SRC}")
 endif()
